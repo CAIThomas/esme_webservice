@@ -148,6 +148,33 @@ def borrow_book():
         student_id=student_id,
         book_id=book_id,
         borrow_date=datetime.utcnow()
+
+@books_bp.route('/return', methods=['POST'])
+
+def return_book():
+    data = request.get_json()
+
+    student_id = data.get('student_id')
+    book_id = data.get('book_id')
+
+    if not student_id or not book_id:
+        return jsonify({'error': 'student_id and book_id are required'}), 400
+
+    # Trouve l'emprunt actif correspondant
+    borrow_record = StudentBook.query.filter_by(
+        student_id=student_id,
+        book_id=book_id,
+        return_date=None
+    ).first()
+
+    if not borrow_record:
+        return jsonify({'error': 'No active borrow record found for this student and book'}), 404
+
+    borrow_record.return_date = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({'message': 'Book successfully returned'})
+
     )
     db.session.add(borrow)
     db.session.commit()

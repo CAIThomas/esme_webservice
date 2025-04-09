@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from models import db, Student
+from routes.books import books_bp
+from models import db, Student, Book, StudentBook
 from datetime import datetime
 
 students_bp = Blueprint('students', __name__)
@@ -94,3 +95,61 @@ def delete_student(id):
     db.session.delete(student)
     db.session.commit()
     return jsonify({'message': 'Student deleted successfully'})
+
+# 🔹 Récupérer les livres empruntés par un étudiant
+@students_bp.route('/students/<int:id>/borrowed_books', methods=['GET'])
+def get_borrowed_books_for_student(id):
+    records = StudentBook.query.filter_by(student_id=id, return_date=None).all()
+    result = []
+    for record in records:
+        book = Book.query.get(record.book_id)
+        result.append({
+            'book_id': book.id,
+            'title': book.title,
+            'borrow_date': record.borrow_date.strftime('%Y-%m-%d')
+        })
+    return jsonify(result)
+
+
+@books_bp.route('/books/borrowed', methods=['GET'])
+def get_borrowed_books():
+    borrowed = StudentBook.query.filter_by(return_date=None).all()
+    
+    result = []
+    for record in borrowed:
+        book = Book.query.get(record.book_id)
+        result.append({
+            'book_id': book.id,
+            'title': book.title,
+            'author': book.author,
+            'borrow_date': record.borrow_date.strftime('%Y-%m-%d'),
+            'borrower_id': record.student_id
+        })
+    
+    return jsonify(result)
+
+@books_bp.route('/borrow', methods=['POST'])
+def borrow_book():
+    data = request.get_json()
+
+    student_id = data.get('student_id')
+    book_id = data.get('book_id')
+
+    if not student_id or not book_id:
+        return jsonify({'error': 'student_id and book_id are required'}), 400
+
+    # Vérifie si le livre est déjà emprunté (non retourné)
+    existing_borrow = StudentBook.query.filter_by(book_id=book_id, return_date=None).first()
+    if existing_borrow:
+        return jsonify({'error': 'Book is already borrowed'}), 409
+
+    # Crée le lien entre l’élève et le livre
+    borrow = StudentBook(
+        student_id=student_id,
+        book_id=book_id,
+        borrow_date=datetime.utcnow()
+    )
+    db.session.add(borrow)
+    db.session.commit()
+
+    return jsonify({'message': 'Book successfully borrowed'})
